@@ -2,10 +2,26 @@ import { useState, useEffect, useCallback } from 'react';
 
 type GatewayStatus = 'unknown' | 'checking' | 'running' | 'stopped' | 'error';
 
+interface StatsData {
+  totalTokens?: number;
+  totalCost?: number;
+  activeAgents?: number;
+  totalRequests?: number;
+  [key: string]: unknown;
+}
+
+type StatsState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'loaded'; data: StatsData }
+  | { status: 'error'; message: string };
+
 function Dashboard() {
   const [gwStatus, setGwStatus] = useState<GatewayStatus>('unknown');
   const [gwOutput, setGwOutput] = useState('');
   const [actionInProgress, setActionInProgress] = useState(false);
+
+  const [stats, setStats] = useState<StatsState>({ status: 'idle' });
 
   const isElectron = typeof window !== 'undefined' && window.odo?.isElectron;
 
@@ -37,6 +53,27 @@ function Dashboard() {
     const interval = setInterval(checkStatus, 15000);
     return () => clearInterval(interval);
   }, [checkStatus]);
+
+  const fetchStats = useCallback(async () => {
+    if (!isElectron) {
+      setStats({ status: 'error', message: 'Not running in Electron' });
+      return;
+    }
+    setStats({ status: 'loading' });
+    try {
+      const data = (await window.odo.ocm.api('GET', '/api/stats')) as StatsData;
+      setStats({ status: 'loaded', data });
+    } catch (err) {
+      setStats({ status: 'error', message: String(err) });
+    }
+  }, [isElectron]);
+
+  useEffect(() => {
+    fetchStats();
+    // Refresh stats every 30 seconds
+    const interval = setInterval(fetchStats, 30000);
+    return () => clearInterval(interval);
+  }, [fetchStats]);
 
   const handleAction = async (action: 'start' | 'stop' | 'restart') => {
     if (!isElectron) return;
@@ -136,20 +173,76 @@ function Dashboard() {
           </p>
         </section>
 
-        {/* Stats Summary (placeholder) */}
+        {/* Stats Summary */}
         <section className="bg-odo-surface border border-odo-border rounded-lg p-6 lg:col-span-2">
-          <h2 className="text-lg font-semibold text-white mb-4">
-            Stats Summary
-          </h2>
-          <p className="text-odo-text-dim text-sm">
-            System statistics and metrics will be available in a future update.
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-white">
+              Stats Summary
+            </h2>
+            <button
+              onClick={fetchStats}
+              disabled={stats.status === 'loading'}
+              className="px-3 py-1 bg-odo-border hover:bg-gray-600 disabled:opacity-50 text-white rounded text-xs font-medium transition-colors"
+            >
+              {stats.status === 'loading' ? 'Loading...' : 'Refresh'}
+            </button>
+          </div>
+
+          {stats.status === 'idle' && (
+            <p className="text-odo-text-dim text-sm">Initializing...</p>
+          )}
+
+          {stats.status === 'loading' && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-odo-bg border border-odo-border rounded-lg p-4 animate-pulse">
+                  <div className="h-4 bg-odo-border rounded w-24 mb-2" />
+                  <div className="h-6 bg-odo-border rounded w-16" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {stats.status === 'error' && (
+            <p className="text-odo-text-dim text-sm">
+              Unable to load stats — OCM server may not be running.
+            </p>
+          )}
+
+          {stats.status === 'loaded' && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-odo-bg border border-odo-border rounded-lg p-4">
+                <p className="text-odo-text-dim text-xs uppercase tracking-wide mb-1">Total Tokens</p>
+                <p className="text-2xl font-bold text-white">
+                  {typeof stats.data.totalTokens === 'number'
+                    ? stats.data.totalTokens.toLocaleString()
+                    : '—'}
+                </p>
+              </div>
+              <div className="bg-odo-bg border border-odo-border rounded-lg p-4">
+                <p className="text-odo-text-dim text-xs uppercase tracking-wide mb-1">Total Cost</p>
+                <p className="text-2xl font-bold text-white">
+                  {typeof stats.data.totalCost === 'number'
+                    ? `$${stats.data.totalCost.toFixed(4)}`
+                    : '—'}
+                </p>
+              </div>
+              <div className="bg-odo-bg border border-odo-border rounded-lg p-4">
+                <p className="text-odo-text-dim text-xs uppercase tracking-wide mb-1">Active Agents</p>
+                <p className="text-2xl font-bold text-white">
+                  {typeof stats.data.activeAgents === 'number'
+                    ? stats.data.activeAgents
+                    : '—'}
+                </p>
+              </div>
+            </div>
+          )}
         </section>
       </div>
 
       {/* Footer */}
       <footer className="mt-8 text-center text-odo-text-dim text-xs">
-        ODO v{window.odo?.version ?? '0.10.0'} &middot; OpenClaw Dashboard
+        ODO v{window.odo?.version ?? '0.10.1'} &middot; OpenClaw Dashboard
         Orchestrator
       </footer>
     </div>

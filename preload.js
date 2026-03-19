@@ -4,7 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('odo', {
   platform: process.platform,
-  version: '0.10.0',
+  version: '0.10.1',
   isElectron: true,
 
   gateway: {
