@@ -1,8 +1,12 @@
 'use strict';
 
-const { app, BrowserWindow, Tray, Menu, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, dialog, ipcMain } = require('electron');
 const path = require('path');
-const { fork } = require('child_process');
+const { fork, execFile } = require('child_process');
+const http = require('http');
+
+// ── Dev Mode Detection ──────────────────────────────────────
+const isDev = !app.isPackaged;
 
 // ── State ────────────────────────────────────────────────────
 let mainWindow = null;
@@ -58,7 +62,7 @@ function startServer() {
           }).then(({ response }) => {
             if (response === 0) {
               startServer().then(() => {
-                if (mainWindow) mainWindow.loadURL(`http://127.0.0.1:${serverPort}`);
+                if (mainWindow) mainWindow.reload();
               });
             } else {
               app.quit();
@@ -102,7 +106,12 @@ function createWindow() {
     }
   });
 
-  mainWindow.loadURL(`http://127.0.0.1:${serverPort}`);
+  // Load the React UI (Vite dev server in dev, built files in production)
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:5173');
+  } else {
+    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+  }
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
@@ -166,7 +175,7 @@ function createTray() {
       click: async () => {
         stopServer();
         await startServer();
-        if (mainWindow) mainWindow.loadURL(`http://127.0.0.1:${serverPort}`);
+        if (mainWindow) mainWindow.reload();
       }
     },
     { type: 'separator' },
@@ -201,6 +210,59 @@ function createTray() {
     }
   });
 }
+
+// ── IPC Handlers ────────────────────────────────────────────
+
+function runOpenclawCommand(args) {
+  return new Promise((resolve, reject) => {
+    execFile('openclaw', args, { timeout: 30000 }, (error, stdout, stderr) => {
+      if (error) {
+        resolve(stderr || error.message);
+      } else {
+        resolve(stdout || 'OK');
+      }
+    });
+  });
+}
+
+function proxyOcmApi(method, urlPath, body) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: '127.0.0.1',
+      port: serverPort,
+      path: urlPath,
+      method: method.toUpperCase(),
+      headers: { 'Content-Type': 'application/json' },
+    };
+
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => (data += chunk));
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch {
+          resolve(data);
+        }
+      });
+    });
+
+    req.on('error', (err) => reject(err.message));
+
+    if (body && method.toUpperCase() !== 'GET') {
+      req.write(JSON.stringify(body));
+    }
+    req.end();
+  });
+}
+
+ipcMain.handle('gateway:status', () => runOpenclawCommand(['gateway', 'status']));
+ipcMain.handle('gateway:start', () => runOpenclawCommand(['gateway', 'start']));
+ipcMain.handle('gateway:stop', () => runOpenclawCommand(['gateway', 'stop']));
+ipcMain.handle('gateway:restart', () => runOpenclawCommand(['gateway', 'restart']));
+ipcMain.handle('ocm:api', (_event, { method, path: urlPath, body }) =>
+  proxyOcmApi(method, urlPath, body)
+);
 
 // ── App Lifecycle ────────────────────────────────────────────
 app.whenReady().then(async () => {
