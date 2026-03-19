@@ -24,7 +24,7 @@ const SCRIPT_DIR = __dirname;
 const MANAGER_CONFIG = path.join(SCRIPT_DIR, 'manager-config.json');
 let PORT = 3333;
 let HOST = '0.0.0.0';
-const APP_VERSION = '0.9.4';
+const APP_VERSION = '0.9.6';
 // --port 参数
 const portIdx = process.argv.indexOf('--port');
 if (portIdx !== -1 && process.argv[portIdx + 1]) PORT = parseInt(process.argv[portIdx + 1]) || 3333;

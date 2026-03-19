@@ -7,6 +7,6 @@ const { contextBridge } = require('electron');
 
 contextBridge.exposeInMainWorld('odo', {
   platform: process.platform,
-  version: '0.9.4',
+  version: '0.9.6',
   isElectron: true
 });

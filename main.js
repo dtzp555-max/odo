@@ -108,9 +108,15 @@ function createWindow() {
     mainWindow.show();
   });
 
-  // Close → quit app (no tray)
-  mainWindow.on('close', () => {
-    isQuitting = true;
+  // Close → minimize to tray (hide window, keep server running)
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+      if (process.platform === 'darwin' && app.dock) {
+        app.dock.hide();
+      }
+    }
   });
 
   mainWindow.on('closed', () => {
@@ -148,6 +154,7 @@ function createTray() {
         if (mainWindow) {
           mainWindow.show();
           mainWindow.focus();
+          if (process.platform === 'darwin' && app.dock) app.dock.show();
         } else {
           createWindow();
         }
@@ -174,11 +181,23 @@ function createTray() {
 
   tray.setContextMenu(contextMenu);
 
+  // Left-click tray → show window (Windows/Linux; macOS shows context menu by default)
+  tray.on('click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+      if (process.platform === 'darwin' && app.dock) app.dock.show();
+    } else {
+      createWindow();
+    }
+  });
+
   // Double-click tray → show window (Windows/Linux)
   tray.on('double-click', () => {
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
+      if (process.platform === 'darwin' && app.dock) app.dock.show();
     }
   });
 }
@@ -215,6 +234,8 @@ app.on('activate', () => {
   // macOS dock click → show window
   if (mainWindow) {
     mainWindow.show();
+    mainWindow.focus();
+    if (process.platform === 'darwin' && app.dock) app.dock.show();
   } else {
     createWindow();
   }
