@@ -108,12 +108,9 @@ function createWindow() {
     mainWindow.show();
   });
 
-  // Close → hide to tray (don't quit)
-  mainWindow.on('close', (event) => {
-    if (!isQuitting) {
-      event.preventDefault();
-      mainWindow.hide();
-    }
+  // Close → quit app (no tray)
+  mainWindow.on('close', () => {
+    isQuitting = true;
   });
 
   mainWindow.on('closed', () => {

@@ -1,6 +1,6 @@
 {
   "name": "odo",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "ODO — OpenClaw Dashboard Orchestrator",
   "main": "main.js",
   "scripts": {
